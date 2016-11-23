@@ -9,8 +9,8 @@ import binascii
 import sys
 import tarfile
 
-tarFilename = "data/data/org.fedorahosted.freeotp/./shared_prefs/tokens.xml"
-abFilename = "data/data/org.fedorahosted.freeotp/./shared_prefs/tokens.xml"
+filenameSwitcher = {".gz": "data/data/org.fedorahosted.freeotp/./shared_prefs/tokens.xml",
+                    ".ab": "data/data/org.fedorahosted.freeotp/./shared_prefs/tokens.xml"} # I'm actually not sure what it is in the android backup, probably needs a prefix.
 
 def getTarObjectFromABBackup(filename):
     abHeaderReplacement = b"\x1f\x8b\x08\x00\x00\x00\x00\x00"
@@ -23,13 +23,16 @@ def getTarObjectFromTarBackup(filename):
     print(filename)
     return tarfile.open(filename)
 
-def extractXMLFileFromTarObject(tarObj):
-    return tarObj.extractfile(abFilename)
+def extractXMLFileFromTarObject(tarObj,backupExtension):
+    return tarObj.extractfile(filenameSwitcher[backupExtension])
+
+backupFile = sys.argv[1]
+backupExtension = sys.argv[1][-3:]
 
 extensionSwitcher = {".ab": getTarObjectFromABBackup,
                      ".gz": getTarObjectFromTarBackup}
 
-xmlFH = extractXMLFileFromTarObject(extensionSwitcher[sys.argv[1][-3:]](sys.argv[1]))
+xmlFH = extractXMLFileFromTarObject(extensionSwitcher[backupExtension](backupFile), backupExtension)
 
 xmldata = xd.parse(xmlFH)
 
