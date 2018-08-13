@@ -8,16 +8,23 @@ from termcolor import colored, cprint
 import binascii
 import sys
 import tarfile
+import io
+import pprint as pp
+import subprocess
+import urllib
 
 filenameSwitcher = {".gz": "data/data/org.fedorahosted.freeotp/./shared_prefs/tokens.xml",
-                    ".ab": "data/data/org.fedorahosted.freeotp/./shared_prefs/tokens.xml"} # I'm actually not sure what it is in the android backup, probably needs a prefix.
+                    ".ab": "apps/org.fedorahosted.freeotp/sp/tokens.xml"} # I'm actually not sure what it is in the android backup, probably needs a prefix.
 
 def getTarObjectFromABBackup(filename):
     abHeaderReplacement = b"\x1f\x8b\x08\x00\x00\x00\x00\x00"
     ab = open(filename, 'rb')
     ab.seek(24)
-    abf = io.BytesIO(abHeaderReplacement + ab.read())
-    return tarfile.open(abf)
+    abf = abHeaderReplacement + ab.read()
+    tar = open(filename[:-3] + ".tar.gz", 'wb')
+    tar.write(abf)
+    tar.close()
+    return tarfile.open(filename[:-3] + ".tar.gz")
 
 def getTarObjectFromTarBackup(filename):
     print(filename)
@@ -39,7 +46,22 @@ xmldata = xd.parse(xmlFH)
 data = [json.loads(x['#text']) for x in xmldata['map']['string']]
 
 for datum in data[:-1]:
-    codeText = "otpauth://" + datum['type'].lower() + '/' + datum['label'] + '?secret=' + str(base64.b32encode( b''.join([x.to_bytes(1,'big',signed=True) for x in datum['secret']])))[2:-1]
+    pp.pprint(datum)
+    if type(datum) == list:
+        continue
+    issuerExt = ''
+    issuerExtTemplate = ''
+    if 'issuerExt' in datum and len(datum['issuerExt']) > 0:
+        issuerExt=datum['issuerExt']
+        issuerExtTemplate = '?issuer={issuerExt}'
+    issuerInt = ''
+    issuerIntTemplate = ''
+    if 'issuerInt' in datum and len(datum['issuerInt']) > 0:
+        issuerInt=datum['issuerInt']
+        issuerIntTemplate = '{issuerInt}:'
+    secret=str(base64.b32encode( b''.join([x.to_bytes(1,'big',signed=True) for x in datum['secret']])))[2:-1]
+    codeTextTempl = "otpauth://{type}/" + issuerIntTemplate + "{label}?secret={secret}" + issuerExtTemplate
+    codeText = codeTextTempl.format(type=datum['type'].lower(),label=datum['label'],secret=secret,issuerInt=issuerInt,issuerExt=issuerExt)
     qrfactory = qrcode.QRCode(box_size=1)
     qrfactory.add_data(codeText)
     qrfactory.make(fit=True)
@@ -55,4 +77,5 @@ for datum in data[:-1]:
             text = colored("  ", "white", attrs=["reverse"])
         print(text,end="")
     print()
-    print(codeText)
+    print(codeText.replace(" ", "%20"))
+    subprocess.run("pass otp insert " + issuerIntTemplate.format(issuerInt=issuerInt) + datum['label'], env={"PASSWORD_STORE_DIR": "/tank/ranmason/.password-store-work"}, shell=True, input=codeText.replace(" ", "%20"), encoding='ascii')
