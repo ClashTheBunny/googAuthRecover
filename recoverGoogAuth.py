@@ -12,6 +12,7 @@ import io
 import pprint as pp
 import subprocess
 import urllib
+import os
 
 filenameSwitcher = {".gz": "data/data/org.fedorahosted.freeotp/./shared_prefs/tokens.xml",
                     ".ab": "apps/org.fedorahosted.freeotp/sp/tokens.xml"} # I'm actually not sure what it is in the android backup, probably needs a prefix.
@@ -49,19 +50,19 @@ for datum in data[:-1]:
     pp.pprint(datum)
     if type(datum) == list:
         continue
-    issuerExt = ''
-    issuerExtTemplate = ''
-    if 'issuerExt' in datum and len(datum['issuerExt']) > 0:
-        issuerExt=datum['issuerExt']
-        issuerExtTemplate = '?issuer={issuerExt}'
+    # issuerExt = ''
+    # issuerExtTemplate = ''
+    # if 'issuerExt' in datum and len(datum['issuerExt']) > 0:
+    #     issuerExt=datum['issuerExt']
+    #     issuerExtTemplate = '?issuer={issuerExt}'
     issuerInt = ''
     issuerIntTemplate = ''
     if 'issuerInt' in datum and len(datum['issuerInt']) > 0:
         issuerInt=datum['issuerInt']
         issuerIntTemplate = '{issuerInt}:'
     secret=str(base64.b32encode( b''.join([x.to_bytes(1,'big',signed=True) for x in datum['secret']])))[2:-1]
-    codeTextTempl = "otpauth://{type}/" + issuerIntTemplate + "{label}?secret={secret}" + issuerExtTemplate
-    codeText = codeTextTempl.format(type=datum['type'].lower(),label=datum['label'],secret=secret,issuerInt=issuerInt,issuerExt=issuerExt)
+    codeTextTempl = "otpauth://{type}/" + issuerIntTemplate + "{label}?secret={secret}" # + issuerExtTemplate
+    codeText = codeTextTempl.format(type=datum['type'].lower(),label=datum['label'],secret=secret,issuerInt=issuerInt) #,issuerExt=issuerExt)
     qrfactory = qrcode.QRCode(box_size=1)
     qrfactory.add_data(codeText)
     qrfactory.make(fit=True)
@@ -78,4 +79,8 @@ for datum in data[:-1]:
         print(text,end="")
     print()
     print(codeText.replace(" ", "%20"))
-    subprocess.run("pass otp insert " + issuerIntTemplate.format(issuerInt=issuerInt) + datum['label'], env={"PASSWORD_STORE_DIR": "/tank/ranmason/.password-store-work"}, shell=True, input=codeText.replace(" ", "%20"), encoding='ascii')
+    if os.environ.get('PASSWORD_STORE_DIR'):
+        env={"PASSWORD_STORE_DIR": os.environ.get('PASSWORD_STORE_DIR')}
+    else:
+        env={}
+    subprocess.run("pass otp insert " + issuerIntTemplate.format(issuerInt=issuerInt).replace(":","/") + datum['label'], env=env, shell=True, input=codeText.replace(" ", "%20"), encoding='ascii')
