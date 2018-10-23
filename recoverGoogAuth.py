@@ -46,7 +46,7 @@ xmldata = xd.parse(xmlFH)
 
 data = [json.loads(x['#text']) for x in xmldata['map']['string']]
 
-for datum in data[:-1]:
+for datum in data:
     pp.pprint(datum)
     if type(datum) == list:
         continue
